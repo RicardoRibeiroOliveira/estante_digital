@@ -25,6 +25,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
 
   bool _isSaving = false;
   Uint8List? _selectedPdfData;
+  String? _selectedSourceFilePath;
   String? _legacyPdfPath;
   String? _selectedFileName;
 
@@ -55,6 +56,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
 
     setState(() {
       _selectedPdfData = result.bytes;
+      _selectedSourceFilePath = result.filePath;
       _legacyPdfPath = null;
       _selectedFileName = result.fileName;
     });
@@ -92,6 +94,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
         await _libraryService.replaceBookPdf(
           book: updatedBook,
           newPdfData: _selectedPdfData!,
+          newSourceFilePath: _selectedSourceFilePath,
           newFileName: _selectedFileName!,
         );
       } else {
@@ -103,6 +106,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
         title: _titleController.text.trim(),
         author: _authorController.text.trim(),
         pdfData: _selectedPdfData!,
+        sourceFilePath: _selectedSourceFilePath,
         fileName: _selectedFileName!,
       );
     }

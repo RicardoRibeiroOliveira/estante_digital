@@ -1,11 +1,11 @@
-import 'dart:io';
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../../models/book.dart';
+import '../../services/library_service.dart';
 import '../../services/pdf_storage_service.dart';
 
 class PdfViewerScreen extends StatefulWidget {
@@ -19,6 +19,7 @@ class PdfViewerScreen extends StatefulWidget {
 
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   final _pdfStorageService = PdfStorageService();
+  final _libraryService = LibraryService();
   late Future<_PdfSource> _pdfSourceFuture;
 
   @override
@@ -28,23 +29,32 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Future<_PdfSource> _resolvePdfSource() async {
-    if (widget.book.hasEmbeddedPdf) {
-      return _PdfSource(
-        bytes: widget.book.pdfData!,
-        fileName: widget.book.fileName,
-      );
+    var book = widget.book;
+
+    if (book.hasEmbeddedPdf && (book.pdfData == null || book.pdfData!.isEmpty)) {
+      final bookId = book.id;
+      if (bookId != null) {
+        final fullBook = await _libraryService.getBookById(bookId);
+        if (fullBook != null) {
+          book = fullBook;
+        }
+        final bytes = await _libraryService.getEmbeddedPdfData(bookId);
+        if (bytes != null) {
+          return _PdfSource(bytes: bytes, fileName: book.fileName);
+        }
+      }
     }
 
-    if (widget.book.pdfPath != null) {
-      final file = await _pdfStorageService.resolveLegacyPdfFile(
-        widget.book.pdfPath!,
-      );
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
+    if (book.pdfData != null && book.pdfData!.isNotEmpty) {
+      return _PdfSource(bytes: book.pdfData!, fileName: book.fileName);
+    }
+
+    if (book.pdfPath != null) {
+      final bytes = await _pdfStorageService.readLegacyPdf(book.pdfPath!);
+      if (bytes != null) {
         return _PdfSource(
           bytes: bytes,
-          fileName: widget.book.fileName,
-          file: file,
+          fileName: book.fileName,
         );
       }
     }
@@ -53,13 +63,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Future<void> _openExternally(_PdfSource source) async {
-    final file =
-        source.file ??
-        await _pdfStorageService.createTemporaryPdfFile(
-          bytes: source.bytes,
-          fileName: source.fileName,
-        );
-    await OpenFilex.open(file.path);
+    await _pdfStorageService.openPdfExternally(
+      bytes: source.bytes,
+      fileName: source.fileName,
+    );
   }
 
   @override
@@ -111,9 +118,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 }
 
 class _PdfSource {
-  const _PdfSource({required this.bytes, required this.fileName, this.file});
+  const _PdfSource({required this.bytes, required this.fileName});
 
   final Uint8List bytes;
   final String fileName;
-  final File? file;
 }

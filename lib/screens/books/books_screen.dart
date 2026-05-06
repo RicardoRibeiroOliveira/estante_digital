@@ -34,13 +34,51 @@ class _BooksScreenState extends State<BooksScreen> {
   }
 
   Future<void> _openBookForm([Book? book]) async {
+    Book? bookForEditing = book;
+    if (book != null) {
+      bookForEditing = await _libraryService.getBookById(book.id!);
+      if (bookForEditing == null) {
+        if (!mounted) {
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nao foi possivel localizar o livro.')),
+        );
+        return;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => BookFormScreen(shelf: widget.shelf, book: book),
+        builder: (_) =>
+            BookFormScreen(shelf: widget.shelf, book: bookForEditing),
       ),
     );
 
     _loadBooks();
+  }
+
+  Future<void> _openPdfViewer(Book book) async {
+    final fullBook = await _libraryService.getBookById(book.id!);
+    if (!mounted) {
+      return;
+    }
+
+    if (fullBook == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nao foi possivel localizar o PDF.')),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PdfViewerScreen(book: fullBook)),
+    );
   }
 
   Future<void> _deleteBook(Book book) async {
@@ -126,13 +164,7 @@ class _BooksScreenState extends State<BooksScreen> {
               return Card(
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(16),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => PdfViewerScreen(book: book),
-                      ),
-                    );
-                  },
+                  onTap: () => _openPdfViewer(book),
                   leading: const CircleAvatar(
                     child: Icon(Icons.menu_book_rounded),
                   ),

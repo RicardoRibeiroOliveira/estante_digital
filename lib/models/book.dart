@@ -9,6 +9,7 @@ class Book {
     required this.title,
     this.author,
     this.pdfData,
+    this.hasEmbeddedPdfData = false,
     this.pdfPath,
     required this.fileName,
     required this.createdAt,
@@ -20,6 +21,7 @@ class Book {
   final String title;
   final String? author;
   final Uint8List? pdfData;
+  final bool hasEmbeddedPdfData;
   final String? pdfPath;
   final String fileName;
   final DateTime createdAt;
@@ -46,6 +48,9 @@ class Book {
       title: map['title'] as String,
       author: map['author'] as String?,
       pdfData: map['pdf_data'] as Uint8List?,
+      hasEmbeddedPdfData:
+          (map['has_embedded_pdf_data'] as int?) == 1 ||
+          map['pdf_data'] != null,
       pdfPath: map['pdf_path'] as String?,
       fileName: map['file_name'] as String,
       createdAt: DateTime.parse(map['created_at'] as String),
@@ -59,6 +64,7 @@ class Book {
     String? title,
     String? author,
     Object? pdfData = _unsetValue,
+    bool? hasEmbeddedPdfData,
     Object? pdfPath = _unsetValue,
     String? fileName,
     DateTime? createdAt,
@@ -72,6 +78,7 @@ class Book {
       pdfData: identical(pdfData, _unsetValue)
           ? this.pdfData
           : pdfData as Uint8List?,
+      hasEmbeddedPdfData: hasEmbeddedPdfData ?? this.hasEmbeddedPdfData,
       pdfPath: identical(pdfPath, _unsetValue)
           ? this.pdfPath
           : pdfPath as String?,
@@ -81,5 +88,6 @@ class Book {
     );
   }
 
-  bool get hasEmbeddedPdf => pdfData != null && pdfData!.isNotEmpty;
+  bool get hasEmbeddedPdf =>
+      (pdfData != null && pdfData!.isNotEmpty) || hasEmbeddedPdfData;
 }

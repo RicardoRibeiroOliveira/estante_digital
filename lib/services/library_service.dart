@@ -65,12 +65,109 @@ class LibraryService {
     final db = await _database.database;
     final result = await db.query(
       'books',
+      columns: const [
+        'id',
+        'shelf_id',
+        'title',
+        'author',
+        'pdf_path',
+        'file_name',
+        'created_at',
+        'updated_at',
+      ],
       where: 'shelf_id = ?',
       whereArgs: [shelfId],
       orderBy: 'updated_at DESC',
     );
 
-    return result.map(Book.fromMap).toList();
+    final books = result.map(Book.fromMap).toList();
+    final embeddedIds = await db.rawQuery(
+      '''
+      SELECT id
+      FROM books
+      WHERE shelf_id = ? AND pdf_data IS NOT NULL
+      ''',
+      [shelfId],
+    );
+    final idsWithEmbeddedPdf = embeddedIds
+        .map((row) => row['id'] as int)
+        .toSet();
+
+    return books
+        .map(
+          (book) => book.copyWith(
+            hasEmbeddedPdfData: idsWithEmbeddedPdf.contains(book.id),
+          ),
+        )
+        .toList();
+  }
+
+  Future<Book?> getBookById(int id) async {
+    final db = await _database.database;
+    final result = await db.query(
+      'books',
+      columns: const [
+        'id',
+        'shelf_id',
+        'title',
+        'author',
+        'pdf_path',
+        'file_name',
+        'created_at',
+        'updated_at',
+      ],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    if (result.isEmpty) {
+      return null;
+    }
+
+    final embeddedPdfExists = await db.rawQuery(
+      'SELECT id FROM books WHERE id = ? AND pdf_data IS NOT NULL LIMIT 1',
+      [id],
+    );
+
+    return Book.fromMap(result.first).copyWith(
+      hasEmbeddedPdfData: embeddedPdfExists.isNotEmpty,
+    );
+  }
+
+  Future<Uint8List?> getEmbeddedPdfData(int id) async {
+    final db = await _database.database;
+    const chunkSize = 512 * 1024;
+    final buffer = BytesBuilder(copy: false);
+    var start = 1;
+
+    while (true) {
+      final result = await db.rawQuery(
+        '''
+        SELECT substr(pdf_data, ?, ?) AS chunk
+        FROM books
+        WHERE id = ? AND pdf_data IS NOT NULL
+        LIMIT 1
+        ''',
+        [start, chunkSize, id],
+      );
+
+      if (result.isEmpty) {
+        return buffer.length == 0 ? null : buffer.takeBytes();
+      }
+
+      final chunk = result.first['chunk'] as Uint8List?;
+      if (chunk == null || chunk.isEmpty) {
+        return buffer.length == 0 ? null : buffer.takeBytes();
+      }
+
+      buffer.add(chunk);
+      if (chunk.length < chunkSize) {
+        return buffer.takeBytes();
+      }
+
+      start += chunkSize;
+    }
   }
 
   Future<int> createBook({
@@ -78,10 +175,16 @@ class LibraryService {
     required String title,
     String? author,
     required Uint8List pdfData,
+    String? sourceFilePath,
     required String fileName,
   }) async {
     final db = await _database.database;
     final now = DateTime.now();
+    final storedPath = await _pdfStorageService.storePdfInLibrary(
+      fileName: fileName,
+      bytes: pdfData,
+      sourceFilePath: sourceFilePath,
+    );
 
     await db.update(
       'shelves',
@@ -96,7 +199,9 @@ class LibraryService {
         shelfId: shelfId,
         title: title,
         author: author,
-        pdfData: pdfData,
+        pdfData: null,
+        hasEmbeddedPdfData: storedPath == null,
+        pdfPath: storedPath,
         fileName: fileName,
         createdAt: now,
         updatedAt: now,
@@ -107,11 +212,16 @@ class LibraryService {
   Future<void> updateBook(Book book) async {
     final db = await _database.database;
     final now = DateTime.now();
+    final updateMap = book.copyWith(updatedAt: now).toMap()..remove('id');
+
+    if (book.hasEmbeddedPdfData && book.pdfData == null) {
+      updateMap.remove('pdf_data');
+    }
 
     await db.transaction((txn) async {
       await txn.update(
         'books',
-        book.copyWith(updatedAt: now).toMap(),
+        updateMap,
         where: 'id = ?',
         whereArgs: [book.id],
       );
@@ -128,14 +238,26 @@ class LibraryService {
   Future<void> replaceBookPdf({
     required Book book,
     required Uint8List newPdfData,
+    String? newSourceFilePath,
     required String newFileName,
   }) async {
     if (book.pdfPath != null) {
       await _pdfStorageService.deleteLegacyPdfIfExists(book.pdfPath!);
     }
 
+    final storedPath = await _pdfStorageService.storePdfInLibrary(
+      fileName: newFileName,
+      bytes: newPdfData,
+      sourceFilePath: newSourceFilePath,
+    );
+
     await updateBook(
-      book.copyWith(pdfData: newPdfData, pdfPath: null, fileName: newFileName),
+      book.copyWith(
+        pdfData: null,
+        hasEmbeddedPdfData: storedPath == null,
+        pdfPath: storedPath,
+        fileName: newFileName,
+      ),
     );
   }
 
