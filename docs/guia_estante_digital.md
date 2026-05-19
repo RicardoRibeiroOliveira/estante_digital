@@ -170,12 +170,19 @@ O projeto ja inclui um servico para:
 - exportar o arquivo `.db`
 - importar um `.db` existente
 - validar se o banco possui as tabelas `shelves` e `books`
+- incorporar automaticamente no banco os PDFs antigos que ainda estiverem em `pdf_path`
 
 ### Observacao importante
 
-Agora, ao exportar o banco SQLite, os PDFs cadastrados no formato novo vao junto no mesmo arquivo `.db`.
+Agora, ao exportar o banco SQLite, o app tenta incorporar no proprio banco os PDFs antigos que ainda estiverem apenas em `pdf_path`.
 
-Se houver livros antigos que ainda usam apenas `pdf_path`, eles continuarao dependendo do arquivo externo ate serem atualizados com um novo PDF.
+Na pratica, o objetivo passa a ser:
+
+- exportar somente um arquivo `.db`
+- importar somente um arquivo `.db`
+- nao depender da pasta `pdfs/` para restaurar o backup
+
+Se algum PDF antigo nao existir mais no disco local, ele nao podera ser incorporado automaticamente, porque o arquivo de origem ja estara ausente.
 
 ## Passo a passo simples de implementacao
 

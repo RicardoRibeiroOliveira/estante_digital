@@ -76,9 +76,9 @@ class _BooksScreenState extends State<BooksScreen> {
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PdfViewerScreen(book: fullBook)),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PdfViewerScreen(book: fullBook)));
   }
 
   Future<void> _deleteBook(Book book) async {

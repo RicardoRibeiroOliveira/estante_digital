@@ -85,9 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(
-        SnackBar(content: Text('Backup exportado para: $path')),
-      );
+      ).showSnackBar(SnackBar(content: Text('Backup exportado para: $path')));
     } catch (error) {
       if (!mounted) {
         return;

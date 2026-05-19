@@ -1,4 +1,3 @@
-
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -31,7 +30,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Future<_PdfSource> _resolvePdfSource() async {
     var book = widget.book;
 
-    if (book.hasEmbeddedPdf && (book.pdfData == null || book.pdfData!.isEmpty)) {
+    if (book.hasEmbeddedPdf &&
+        (book.pdfData == null || book.pdfData!.isEmpty)) {
       final bookId = book.id;
       if (bookId != null) {
         final fullBook = await _libraryService.getBookById(bookId);
@@ -52,10 +52,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     if (book.pdfPath != null) {
       final bytes = await _pdfStorageService.readLegacyPdf(book.pdfPath!);
       if (bytes != null) {
-        return _PdfSource(
-          bytes: bytes,
-          fileName: book.fileName,
-        );
+        return _PdfSource(bytes: bytes, fileName: book.fileName);
       }
     }
 

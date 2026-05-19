@@ -130,9 +130,9 @@ class LibraryService {
       [id],
     );
 
-    return Book.fromMap(result.first).copyWith(
-      hasEmbeddedPdfData: embeddedPdfExists.isNotEmpty,
-    );
+    return Book.fromMap(
+      result.first,
+    ).copyWith(hasEmbeddedPdfData: embeddedPdfExists.isNotEmpty);
   }
 
   Future<Uint8List?> getEmbeddedPdfData(int id) async {
@@ -175,16 +175,10 @@ class LibraryService {
     required String title,
     String? author,
     required Uint8List pdfData,
-    String? sourceFilePath,
     required String fileName,
   }) async {
     final db = await _database.database;
     final now = DateTime.now();
-    final storedPath = await _pdfStorageService.storePdfInLibrary(
-      fileName: fileName,
-      bytes: pdfData,
-      sourceFilePath: sourceFilePath,
-    );
 
     await db.update(
       'shelves',
@@ -199,9 +193,9 @@ class LibraryService {
         shelfId: shelfId,
         title: title,
         author: author,
-        pdfData: null,
-        hasEmbeddedPdfData: storedPath == null,
-        pdfPath: storedPath,
+        pdfData: pdfData,
+        hasEmbeddedPdfData: true,
+        pdfPath: null,
         fileName: fileName,
         createdAt: now,
         updatedAt: now,
@@ -238,24 +232,17 @@ class LibraryService {
   Future<void> replaceBookPdf({
     required Book book,
     required Uint8List newPdfData,
-    String? newSourceFilePath,
     required String newFileName,
   }) async {
     if (book.pdfPath != null) {
       await _pdfStorageService.deleteLegacyPdfIfExists(book.pdfPath!);
     }
 
-    final storedPath = await _pdfStorageService.storePdfInLibrary(
-      fileName: newFileName,
-      bytes: newPdfData,
-      sourceFilePath: newSourceFilePath,
-    );
-
     await updateBook(
       book.copyWith(
-        pdfData: null,
-        hasEmbeddedPdfData: storedPath == null,
-        pdfPath: storedPath,
+        pdfData: newPdfData,
+        hasEmbeddedPdfData: true,
+        pdfPath: null,
         fileName: newFileName,
       ),
     );
@@ -297,5 +284,44 @@ class LibraryService {
 
     return columnNames.contains('file_name') &&
         (columnNames.contains('pdf_data') || columnNames.contains('pdf_path'));
+  }
+
+  Future<int> embedLegacyPdfsIntoDatabase() async {
+    final db = await _database.database;
+    final legacyBooks = await db.query(
+      'books',
+      columns: const ['id', 'pdf_path'],
+      where:
+          'pdf_path IS NOT NULL AND (pdf_data IS NULL OR length(pdf_data) = 0)',
+    );
+
+    var embeddedCount = 0;
+
+    for (final row in legacyBooks) {
+      final bookId = row['id'] as int?;
+      final pdfPath = row['pdf_path'] as String?;
+      if (bookId == null || pdfPath == null || pdfPath.isEmpty) {
+        continue;
+      }
+
+      final bytes = await _pdfStorageService.readLegacyPdf(pdfPath);
+      if (bytes == null || bytes.isEmpty) {
+        continue;
+      }
+
+      await db.update(
+        'books',
+        {
+          'pdf_data': bytes,
+          'pdf_path': null,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [bookId],
+      );
+      embeddedCount++;
+    }
+
+    return embeddedCount;
   }
 }
